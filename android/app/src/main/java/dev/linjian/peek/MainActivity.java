@@ -136,7 +136,7 @@ public class MainActivity extends Activity {
         loadSettings();
         NowState.start(this);
 
-        DebugState.append(this, "掌心窗公开版 v0.3.8.6 已打开");
+        DebugState.append(this, "掌心窗公开版 v0.3.8.7 已打开");
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 13);
         serviceRunning = CompanionService.isRunning();
         updateUI();
@@ -173,6 +173,7 @@ public class MainActivity extends Activity {
         if (userNameInput != null) userNameInput.setOnFocusChangeListener((v, focused) -> { if (!focused) { saveSettings(); buildMagazinePages(); updateUI(); } });
         if (companionNameInput != null) companionNameInput.setOnFocusChangeListener((v, focused) -> { if (!focused) { saveSettings(); buildMagazinePages(); updateUI(); } });
         if (targetAppsInput != null) targetAppsInput.setOnFocusChangeListener((v, focused) -> { if (!focused) { saveSettings(); updateUI(); } });
+        bindHomeModeAutoSave();
         bindConnectionAutoSave();
 
         bindThemeButton(themeCreamButton, "奶油绿"); bindThemeButton(themeBlueButton, "雾蓝白"); bindThemeButton(themePeachButton, "白桃粉"); bindThemeButton(themeNightButton, "夜航黑"); bindThemeButton(themeMintButton, "薄荷透明"); bindThemeButton(themePurpleButton, "星云紫");
@@ -1810,6 +1811,66 @@ public class MainActivity extends Activity {
         if (intervalInput != null) { intervalInput.addTextChangedListener(watcher); intervalInput.setOnFocusChangeListener(saveOnBlur); }
     }
 
+    private void bindHomeModeAutoSave() {
+        TextWatcher watcher = new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) { }
+            @Override public void afterTextChanged(Editable s) { saveHomeModeSettingsOnly(false); }
+        };
+        View.OnFocusChangeListener saveOnBlur = (v, focused) -> { if (!focused) saveHomeModeSettingsOnly(true); };
+        if (targetAppsInput != null) { targetAppsInput.addTextChangedListener(watcher); targetAppsInput.setOnFocusChangeListener(saveOnBlur); }
+        if (homeThresholdInput != null) { homeThresholdInput.addTextChangedListener(watcher); homeThresholdInput.setOnFocusChangeListener(saveOnBlur); }
+        if (homeCooldownInput != null) { homeCooldownInput.addTextChangedListener(watcher); homeCooldownInput.setOnFocusChangeListener(saveOnBlur); }
+        if (homeTargetInput != null) { homeTargetInput.addTextChangedListener(watcher); homeTargetInput.setOnFocusChangeListener(saveOnBlur); }
+        if (homeModeEnabled != null) homeModeEnabled.setOnCheckedChangeListener((buttonView, isChecked) -> saveHomeModeSettingsOnly(true));
+        if (homeModeForceEnabled != null) homeModeForceEnabled.setOnCheckedChangeListener((buttonView, isChecked) -> saveHomeModeSettingsOnly(true));
+    }
+
+    private void saveHomeModeSettingsOnly(boolean blocking) {
+        SharedPreferences prefs = getSharedPreferences(AppPrefs.PREFS, MODE_PRIVATE);
+        boolean enabled = homeModeEnabled != null && homeModeEnabled.isChecked();
+        boolean force = homeModeForceEnabled != null && homeModeForceEnabled.isChecked();
+        String normalizedTargets = targetAppsInput == null ? prefs.getString(AppPrefs.KEY_TARGET_APPS, "") : AppPrefs.normalizeTargetApps(targetAppsInput.getText().toString());
+        String watchPackages = collectPackagesFromTargets(normalizedTargets);
+        int threshold = homeThresholdInput == null ? prefs.getInt(AppPrefs.KEY_HOME_THRESHOLD_MIN, 10) : parseInt(homeThresholdInput.getText().toString().trim(), 10, 1, 240);
+        int cooldown = homeCooldownInput == null ? prefs.getInt(AppPrefs.KEY_HOME_COOLDOWN_MIN, 5) : parseInt(homeCooldownInput.getText().toString().trim(), 5, 1, 240);
+        String homeTarget = homeTargetInput == null ? prefs.getString(AppPrefs.KEY_HOME_TARGET_PACKAGE, "") : AppPrefs.saveHomeTarget(this, homeTargetInput.getText().toString().trim());
+
+        boolean changed = prefs.getBoolean(AppPrefs.KEY_HOME_MODE_ENABLED, false) != enabled
+                || prefs.getBoolean(AppPrefs.KEY_HOME_MODE_FORCE, false) != force
+                || !prefs.getString(AppPrefs.KEY_TARGET_APPS, "").equals(normalizedTargets)
+                || !prefs.getString(AppPrefs.KEY_HOME_WATCH_PACKAGES, "").equals(watchPackages)
+                || prefs.getInt(AppPrefs.KEY_HOME_THRESHOLD_MIN, 10) != threshold
+                || prefs.getInt(AppPrefs.KEY_HOME_COOLDOWN_MIN, 5) != cooldown
+                || !prefs.getString(AppPrefs.KEY_HOME_TARGET_PACKAGE, "").equals(homeTarget);
+
+        SharedPreferences.Editor e = prefs.edit()
+                .putBoolean(AppPrefs.KEY_HOME_MODE_ENABLED, enabled)
+                .putBoolean(AppPrefs.KEY_HOME_MODE_FORCE, force)
+                .putString(AppPrefs.KEY_TARGET_APPS, normalizedTargets)
+                .putString(AppPrefs.KEY_HOME_WATCH_PACKAGES, watchPackages)
+                .putInt(AppPrefs.KEY_HOME_THRESHOLD_MIN, threshold)
+                .putInt(AppPrefs.KEY_HOME_COOLDOWN_MIN, cooldown)
+                .putString(AppPrefs.KEY_HOME_TARGET_PACKAGE, homeTarget);
+        if (blocking) e.commit(); else e.apply();
+        if (changed) HomeMode.resetTracking(this);
+        if (homeModeStatusText != null) homeModeStatusText.setText(HomeMode.pretty(this));
+    }
+
+    private String collectPackagesFromTargets(String normalizedTargets) {
+        StringBuilder packages = new StringBuilder();
+        String source = normalizedTargets == null ? "" : normalizedTargets;
+        for (String line : source.split("\n")) {
+            String[] parts = line.split("\\|", 2);
+            if (parts.length == 2 && AppPrefs.isPackageLike(parts[1].trim())) {
+                if (packages.length() > 0) packages.append(',');
+                packages.append(parts[1].trim());
+            }
+        }
+        String normalized = AppPrefs.normalizePackageCsv(packages.toString());
+        return normalized.isEmpty() ? AppPrefs.DEFAULT_HOME_WATCH_PACKAGES : normalized;
+    }
+
     private void saveConnectionSettingsOnly(boolean blocking) {
         SharedPreferences.Editor e = getSharedPreferences(AppPrefs.PREFS, MODE_PRIVATE).edit();
         if (serverUrl != null) e.putString(AppPrefs.KEY_SERVER, serverUrl.getText().toString().trim());
@@ -1852,15 +1913,7 @@ public class MainActivity extends Activity {
         if (targetAppsInput != null) {
             String normalizedTargets = AppPrefs.normalizeTargetApps(targetAppsInput.getText().toString());
             e.putString(AppPrefs.KEY_TARGET_APPS, normalizedTargets);
-            StringBuilder packages = new StringBuilder();
-            for (String line : normalizedTargets.split("\\n")) {
-                String[] parts = line.split("\\|", 2);
-                if (parts.length == 2 && AppPrefs.isPackageLike(parts[1].trim())) {
-                    if (packages.length() > 0) packages.append(',');
-                    packages.append(parts[1].trim());
-                }
-            }
-            e.putString(AppPrefs.KEY_HOME_WATCH_PACKAGES, packages.toString());
+            e.putString(AppPrefs.KEY_HOME_WATCH_PACKAGES, collectPackagesFromTargets(normalizedTargets));
         }
         if (homeThresholdInput != null) e.putInt(AppPrefs.KEY_HOME_THRESHOLD_MIN, parseInt(homeThresholdInput.getText().toString().trim(), 10, 1, 240));
         if (homeCooldownInput != null) e.putInt(AppPrefs.KEY_HOME_COOLDOWN_MIN, parseInt(homeCooldownInput.getText().toString().trim(), 5, 1, 240));
@@ -2432,7 +2485,7 @@ public class MainActivity extends Activity {
         getSharedPreferences(AppPrefs.PREFS, MODE_PRIVATE).edit().putBoolean("user_stopped", false).apply(); requestIgnoreBatteryOptimization();
         Intent intent = new Intent(this, CompanionService.class); intent.putExtra("server_url", url); intent.putExtra("token", token);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent); else startService(intent);
-        DebugState.append(this, "已请求启动前台服务：公开版 v0.3.8.6 右侧 love 线稿花枝已启用"); serviceRunning = true; updateUI();
+        DebugState.append(this, "已请求启动前台服务：公开版 v0.3.8.7 右侧 love 线稿花枝已启用"); serviceRunning = true; updateUI();
     }
 
     private void stopCompanionService() { getSharedPreferences(AppPrefs.PREFS, MODE_PRIVATE).edit().putBoolean("user_stopped", true).apply(); stopService(new Intent(this, CompanionService.class)); DebugState.append(this, "已停止服务"); serviceRunning = false; updateUI(); }
