@@ -2207,7 +2207,29 @@ app.get("/health", (_req, res) => res.json({
   wallet_takeout_tools: Array.from(WALLET_TAKEOUT_ACTIONS),
   stability_note: "v0.3.8.8 同步公开版版本信息；普通 /mcp 提前注册统一入口，新增 /mcp-wallet 专用端点，并把专注模式工具前置注册，兼容部分客户端不暴露新增工具的问题。"
 }));
-app.post("/mcp", async (req, res) => {
+aapp.post("/mcp", async (req, res) => {
+    try {
+        const server = makeServer();
+        const transport = new StreamableHTTPServerTransport({
+            sessionIdGenerator: undefined,
+            enableJsonResponse: true
+        });
+        res.on("close", () => transport.close());
+        await server.connect(transport);
+        await transport.handleRequest(req, res, req.body);
+    } catch (err) {
+        console.error(err);
+        if (!res.headersSent) {
+            res.status(500).json({
+                jsonrpc: "2.0",
+                error: { code: -32603, message: String(err).message || err },
+                id: null
+            });
+        }
+    }
+});
+
+app.get("/mcp", (_req, res) => res.status(405).json({ ok: false, error: "Use POST /mcp for Streamable HTTP MCP." }));
   try { const server = makeServer();  const transport = new StreamableHTTPServerTransport({
        sessionIdGenerator: undefined,
        enableJsonResponse: true
