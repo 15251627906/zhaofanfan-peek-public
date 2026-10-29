@@ -212,6 +212,10 @@ Render 一键部署时，`LINJIAN_URL` 会由 Blueprint 自动引用 server 的�
 - `get_takeout_checkout_status`：读取自动点单进度。
 - `cancel_takeout_checkout`：取消自动点单任务。
 
+### 打开网页
+
+- `open_url`：在手机浏览器打开任意网页（如小游戏 CEDAR TOY `https://toy.cedarstar.org`、文章、网页工具）。`url` 必须以 `http://` 或 `https://` 开头；只负责跳转，不会输入或点击页面内容。手机端对应 `open_url` 动作，server 白名单已放行。
+
 
 ## v0.3.8.6 新增工具暴露修复
 

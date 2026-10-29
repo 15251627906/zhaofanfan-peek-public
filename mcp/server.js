@@ -181,6 +181,7 @@ const COMPANION_ACTION_META = {
     trigger_guidian: ["守护", "发起归电", "轻轻叫你回到窗边"],
     care_action: ["守护", "执行关心行动", "完成一次主动照顾"],
     open_app: ["操作", "打开应用", "完成一次手机操作"],
+    open_url: ["操作", "打开网页", "在手机浏览器打开一个链接"],
     screen_break_app: ["守护", "开始屏幕休息", "让眼睛和注意力休息一会儿"],
     end_screen_break: ["守护", "结束屏幕休息", "恢复应用使用"],
     run_sequence: ["操作", "完成组合行动", "按顺序完成了一组手机动作"]
@@ -1062,7 +1063,7 @@ function makeWalletTakeoutServer() {
 function makeServer() {
     const server = new McpServer({ name: "掌心窗", version: "0.3.8.8" });
     const commandBackedTools = new Set([
-        "peek_screen", "get_screen_nodes", "tap_text", "input_text", "draft_xhs_comment", "xhs_comment", "send_visible_comment_after_confirmation", "add_guardian_calendar_event", "care_action", "trigger_guidian", "mark_guidian_returned", "set_guidian_config", "send_weather_notification", "send_phone_command", "open_app", "phone_home", "phone_back", "phone_recents", "phone_screen_off", "send_notification", "set_alarm", "run_sequence", "run_preset", "save_known_app", "screen_break_app", "temporary_screen_break_release", "end_screen_break", "extend_screen_break", "deny_screen_break_release_request", "get_screen_break_state", "get_lock_state", "lock_app", "unlock_app", "temporary_unlock_app", "extend_lock", "deny_unlock_request",
+        "peek_screen", "get_screen_nodes", "tap_text", "input_text", "draft_xhs_comment", "xhs_comment", "send_visible_comment_after_confirmation", "add_guardian_calendar_event", "care_action", "trigger_guidian", "mark_guidian_returned", "set_guidian_config", "send_weather_notification", "send_phone_command", "open_app", "open_url", "phone_home", "phone_back", "phone_recents", "phone_screen_off", "send_notification", "set_alarm", "run_sequence", "run_preset", "save_known_app", "screen_break_app", "temporary_screen_break_release", "end_screen_break", "extend_screen_break", "deny_screen_break_release_request", "get_screen_break_state", "get_lock_state", "lock_app", "unlock_app", "temporary_unlock_app", "extend_lock", "deny_unlock_request",
         "list_screen_break_apps", "list_lockable_apps", "add_screen_break_app", "add_locked_app", "remove_locked_app", "set_screen_break_passphrase", "set_emergency_passphrase", "get_focus_status", "start_focus_mode", "end_focus_mode", "set_focus_plan", "reply_focus_request", "approve_focus_unlock", "deny_focus_unlock", "request_focus_unlock", "create_focus_request", "get_wallet_month_state", "add_wallet_record", "list_wallet_pending", "submit_wallet_approval", "submit_companion_wallet_request", "list_companion_wallet_requests", "list_wallet_request_results", "confirm_wallet_record", "decide_wallet_approval", "save_wallet_request_result", "update_wallet_request_result", "save_user_wallet_request_result", "edit_wallet_record", "delete_wallet_record", "set_wallet_rules", "wallet_approval_request", "get_takeout_state", "set_takeout_budget", "set_takeout_preferences", "add_takeout_card", "save_takeout_card", "update_takeout_card", "remove_takeout_card", "delete_takeout_card", "list_takeout_cards", "list_takeout_meals", "remember_takeout_meal", "remember_current_takeout_meal", "suggest_takeout_options", "create_takeout_plan", "takeout_wallet_request", "open_takeout_link", "open_takeout_plan", "copy_takeout_note", "record_takeout_order", "prepare_takeout_checkout", "auto_takeout_checkout", "get_takeout_checkout_status", "cancel_takeout_checkout"
     ]);
 
@@ -1614,6 +1615,16 @@ function makeServer() {
         const observed = await waitCommand(id, DEFAULT_COMMAND_WAIT_SECONDS);
         postCompanionAction("open_app", { summary: `打开了 ${target.app || target.package || "指定应用"}` }).catch(() => null);
         return textResult({ ...result, observed_status: observed?.command || null, note: "命令已排队。若 observed_status 仍是 pending/dispatched，说明手机端尚未回传；可稍后查看掌心窗调试日志。" });
+    });
+
+    server.tool("open_url", "在手机浏览器里打开一个网址。适合打开小游戏（如 CEDAR TOY https://toy.cedarstar.org）、文章、网页工具等；只负责跳转，不会操作页面内容。url 必须以 http:// 或 https:// 开头。当用户说“打开小游戏/玩会游戏/打开这个链接”时使用。", { url: z.string().min(1).max(2048), device_id: z.string().default(DEFAULT_DEVICE), wait_seconds: z.number().int().min(3).max(20).default(8) }, async ({ url, device_id = DEFAULT_DEVICE, wait_seconds = 8 }) => {
+        const target = String(url || "").trim();
+        if (!/^https?:\/\//i.test(target)) return textResult({ ok: false, error: "url_must_start_with_http_or_https", url: target });
+        const result = await postCommand({ action: "open_url", url: target, device_id, payload: { url: target } });
+        const id = result?.command?.id;
+        const observed = id ? await waitCommand(id, wait_seconds) : null;
+        postCompanionAction("open_url", { summary: `打开了网页 ${target.slice(0, 80)}` }).catch(() => null);
+        return textResult({ ...result, observed_status: observed?.command || null, url: target, note: "已在手机浏览器打开（或等待手机回传）。若手机没反应，检查 App 是否在线、Token 是否一致。" });
     });
 
     server.tool("phone_home", "让手机回到桌面。", { device_id: z.string().default(DEFAULT_DEVICE) }, async ({ device_id = DEFAULT_DEVICE }) => ({ content: [{ type: "text", text: JSON.stringify(await postCommand({ action: "home", device_id }), null, 2) }] }));

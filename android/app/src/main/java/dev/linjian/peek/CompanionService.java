@@ -239,6 +239,14 @@ public class CompanionService extends Service {
                 executeSequence(ctx, id, cmd, serverUrl, token);
                 return;
             }
+            if ("open_url".equals(action)) {
+                JSONObject rr = openUrl(ctx, cmd);
+                boolean ok = rr.optBoolean("ok", false);
+                String result = rr.optString("result", rr.toString());
+                DebugState.append(ctx, "执行打开网页命令：" + result);
+                try { reportCommand(ctx, serverUrl, token, id, ok, result); uploadStateThrottled(serverUrl, token, ctx, false); } catch (Exception ignored) { }
+                return;
+            }
             executeCommand(ctx, id, action, app, pkg, x, y, x1, y1, x2, y2, duration, hour, minute, title, message, vibrate, serverUrl, token, skipUi, targetText, inputText, match, index, append);
         } catch (Exception e) { DebugState.append(ctx, "命令解析异常：" + ScreenshotService.shortMsg(e)); }
     }
@@ -420,6 +428,30 @@ public class CompanionService extends Service {
     }
 
     private static int clampWait(int v) { return Math.max(0, Math.min(5000, v)); }
+
+    /** 打开任意网页（如小游戏、文章、文档）。只负责跳转，不操作页面内容；url 必须以 http:// 或 https:// 开头。 */
+    public static JSONObject openUrl(Context ctx, JSONObject cmd) {
+        JSONObject out = new JSONObject();
+        try {
+            String url = cmd == null ? "" : cmd.optString("url", cmd.optString("link", ""));
+            url = url == null ? "" : url.trim();
+            if (url.length() == 0) { out.put("ok", false); out.put("result", "url_required"); return out; }
+            String lower = url.toLowerCase(Locale.US);
+            if (!lower.startsWith("http://") && !lower.startsWith("https://")) {
+                out.put("ok", false); out.put("result", "unsupported_url_scheme"); out.put("url", url);
+                return out;
+            }
+            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            ctx.startActivity(intent);
+            out.put("ok", true); out.put("result", "opened_url"); out.put("url", url);
+            out.put("note", "已在系统浏览器打开网页；页面内的输入与点击仍需用户本人完成。");
+            return out;
+        } catch (Exception e) {
+            try { out.put("ok", false); out.put("result", "open_url_failed:" + ScreenshotService.shortMsg(e)); } catch (Exception ignored) { }
+            return out;
+        }
+    }
 
     public static String openPackageResult(Context ctx, String pkg) {
         if (pkg == null || pkg.trim().isEmpty()) return "package_empty";

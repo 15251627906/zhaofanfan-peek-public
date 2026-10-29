@@ -375,6 +375,7 @@ const MCP_TOOLS = [
   { name: "create_takeout_plan", description: "基于常点外卖卡片生成点餐行动卡：打开链接、复制备注、是否需要小金库申请。", inputSchema: obj({ card_id: str(""), query: str(""), amount: num(undefined), items: str(""), note: str(""), submit_wallet_request: bool(false), device_id: str(DEFAULT_DEVICE), wait_seconds: int(8) }) },
   { name: "takeout_wallet_request", description: "把一份外卖计划提交到小金库申请，等待处理；付款仍由用户本人完成。", inputSchema: obj({ card_id: str(""), query: str(""), amount: num(undefined), reason: str("想点这份外卖"), device_id: str(DEFAULT_DEVICE), wait_seconds: int(8) }) },
   { name: "open_takeout_link", description: "打开已保存的外卖链接。只负责跳转，不会确认订单或付款。", inputSchema: obj({ card_id: str(""), query: str(""), link: str(""), device_id: str(DEFAULT_DEVICE), wait_seconds: int(8) }) },
+  { name: "open_url", description: "在手机浏览器打开任意网页（如小游戏 CEDAR TOY、文章、网页工具）。url 必须以 http:// 或 https:// 开头；只负责跳转，不会操作页面内容。", inputSchema: obj({ url: str(""), device_id: str(DEFAULT_DEVICE), wait_seconds: int(8) }) },
   { name: "copy_takeout_note", description: "复制外卖下单备注，方便用户在外卖 App 里粘贴。", inputSchema: obj({ card_id: str(""), query: str(""), note: str(""), device_id: str(DEFAULT_DEVICE), wait_seconds: int(8) }) },
   { name: "record_takeout_order", description: "用户付款后，把这顿外卖记入小金库饮食分类。", inputSchema: obj({ amount: num(undefined), card_id: str(""), merchant: str(""), note: str("外卖"), device_id: str(DEFAULT_DEVICE), wait_seconds: int(8) }, ["amount"]) },
 
@@ -824,6 +825,7 @@ async function callMcpTool(name, args = {}, env) {
     case "create_takeout_plan": { const payload = withoutKeys(args, ["device_id", "wait_seconds"]); payload.action = "create_takeout_plan"; return observed({ ...payload, payload }, args.wait_seconds ?? 8); }
     case "takeout_wallet_request": { const payload = withoutKeys(args, ["device_id", "wait_seconds"]); payload.action = "takeout_wallet_request"; return observed({ ...payload, payload }, args.wait_seconds ?? 8); }
     case "open_takeout_link": { const payload = withoutKeys(args, ["device_id", "wait_seconds"]); payload.action = "open_takeout_link"; return observed({ ...payload, payload }, args.wait_seconds ?? 8); }
+    case "open_url": { const payload = withoutKeys(args, ["device_id", "wait_seconds"]); payload.action = "open_url"; return observed({ ...payload, payload }, args.wait_seconds ?? 8); }
     case "copy_takeout_note": { const payload = withoutKeys(args, ["device_id", "wait_seconds"]); payload.action = "copy_takeout_note"; return observed({ ...payload, payload }, args.wait_seconds ?? 8); }
     case "record_takeout_order": { const payload = withoutKeys(args, ["device_id", "wait_seconds"]); payload.action = "record_takeout_order"; return observed({ ...payload, payload }, args.wait_seconds ?? 8); }
     case "prepare_takeout_checkout":
